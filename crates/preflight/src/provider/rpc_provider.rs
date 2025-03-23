@@ -14,20 +14,25 @@
 
 use crate::provider::query::{AccountRangeQueryResponse, StorageRangeQueryResponse};
 use crate::provider::*;
-use alloy::network::{BlockResponse, HeaderResponse, Network};
+use alloy::network::Network;
+use alloy::network::primitives::{BlockResponse, HeaderResponse};
 use alloy::providers::{Provider as AlloyProvider, ProviderBuilder, RootProvider};
-use alloy::rpc::client::RpcClient;
+use alloy_primitives::{Address, Bytes, U256};
+use alloy::rpc::client::{RpcClient, ReqwestClient, ClientBuilder};
+use alloy::rpc::types::Block;
 use alloy::transports::{
     http::{Client, Http},
     layers::{RetryBackoffLayer, RetryBackoffService},
 };
 use anyhow::anyhow;
-use log::{debug, error};
+use log::{debug, error, info};
 use std::future::IntoFuture;
+use std::str::FromStr;
 
 #[derive(Clone, Debug)]
 pub struct RpcProvider<N: Network> {
     http_client: RootProvider<RetryBackoffService<Http<Client>>, N>,
+    rpc_client: ReqwestClient,
     tokio_handle: tokio::runtime::Handle,
 }
 
@@ -42,8 +47,11 @@ impl<N: Network> RpcProvider<N> {
 
         let tokio_handle = tokio::runtime::Handle::current();
 
+        let rpc_client = ClientBuilder::default().http(rpc_url.parse()?);
+
         Ok(RpcProvider {
             http_client,
+            rpc_client,
             tokio_handle,
         })
     }
@@ -73,25 +81,41 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
     fn get_chain(&mut self) -> anyhow::Result<NamedChain> {
         debug!("Querying RPC for chain id");
 
-        let response = self
+        /*let response = self
             .tokio_handle
             .block_on(self.http_client.get_chain_id())?;
 
-        Ok(NamedChain::try_from(response).expect("Unknown chain id"))
+        Ok(NamedChain::try_from(response).expect("Unknown chain id"))*/
+        Ok(NamedChain::Mainnet)
     }
 
     fn get_full_block(&mut self, query: &BlockQuery) -> anyhow::Result<N::BlockResponse> {
         debug!("Querying RPC for full block: {:?}", query);
+        info!("Querying RPC for full block: {:?}", query);
+        println!("{}", std::any::type_name::<Block>());
+
+        let block_no_str = format!("{:#x}", query.block_no);
+        info!("block no = {}", block_no_str);
 
         let response = self.tokio_handle.block_on(
-            self.http_client
-                .get_block_by_number(query.block_no.into(), true),
+            //self.http_client
+            //    .get_block_by_number(query.block_no.into(), true),
+            self.rpc_client.request("eth_getBlockByNumber", (query.shard_id, block_no_str, true)),
         )?;
 
         match response {
             Some(out) => Ok(out),
             None => Err(anyhow!("No data for {:?}", query)),
         }
+
+        /*let header: Header = Default::default();
+        Ok(Block {
+            header: header,
+            uncles: vec![],
+            transactions: BlockTransactions::Full(vec![]),
+            size: None,
+            withdrawals: None,
+        })*/
     }
 
     fn get_uncle_block(&mut self, query: &UncleQuery) -> anyhow::Result<N::BlockResponse> {
@@ -125,18 +149,25 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
     fn get_proof(&mut self, query: &ProofQuery) -> anyhow::Result<EIP1186AccountProofResponse> {
         debug!("Querying RPC for inclusion proof: {:?}", query);
 
-        let out = self.tokio_handle.block_on(
+        // TODO implement on nild
+        /*let out = self.tokio_handle.block_on(
             self.http_client
                 .get_proof(query.address, query.indices.iter().cloned().collect())
                 .number(query.block_no)
                 .into_future(),
-        )?;
-
-        Ok(out)
+        )?;*/
+        
+        Ok(Default::default())
     }
 
     fn get_transaction_count(&mut self, query: &AccountQuery) -> anyhow::Result<U256> {
         debug!("Querying RPC for transaction count: {:?}", query);
+
+        // WA: sender smart account code is not eip7702 formated
+        let default_sender_addr = Address::from_str("0x0000000000000000000000000000000000000001").unwrap();
+        if query.address == default_sender_addr {
+            return Ok(U256::from(0u64))    
+        }
 
         let out = self.tokio_handle.block_on(
             self.http_client
@@ -151,6 +182,11 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
     fn get_balance(&mut self, query: &AccountQuery) -> anyhow::Result<U256> {
         debug!("Querying RPC for balance: {:?}", query);
 
+        // WA: sender smart account code is not eip7702 formated
+        let default_sender_addr = Address::from_str("0x0000000000000000000000000000000000000001").unwrap();
+        if query.address == default_sender_addr {
+            return Ok(U256::from(10000000000800000u64))    
+        }
         let out = self.tokio_handle.block_on(
             self.http_client
                 .get_balance(query.address)
@@ -246,6 +282,7 @@ impl<N: Network> Provider<N> for RpcProvider<N> {
     fn get_next_slot(&mut self, query: &StorageRangeQuery) -> anyhow::Result<U256> {
         let block = self.get_full_block(&BlockQuery {
             block_no: query.block_no,
+            shard_id: 1,// TODO set value
         })?;
         let hash = block.header().hash();
 

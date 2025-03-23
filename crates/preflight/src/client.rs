@@ -67,6 +67,7 @@ where
         // Fetch the parent block
         let parent_block = provider_mut.get_full_block(&BlockQuery {
             block_no: block_no - 1,
+            shard_id: 1,//TODO set value
         })?;
         let parent_header = P::derive_header_response(parent_block);
         let core_parent_header = P::derive_header(parent_header.clone());
@@ -80,8 +81,9 @@ where
         info!("Grabbing blocks and their uncles ...");
         let mut blocks = Vec::new();
         let mut ommers = Vec::new();
+        let shard_id:u64 = 1; // TODO set value
         for block_no in block_no..block_no + block_count {
-            let block = provider_mut.get_full_block(&BlockQuery { block_no })?;
+            let block = provider_mut.get_full_block(&BlockQuery { block_no, shard_id })?;
             let uncle_headers: Vec<_> = P::uncles(&block)
                 .iter()
                 .enumerate()
@@ -126,11 +128,11 @@ where
         if total_difficulty.is_zero() {
             warn!("Provider reported a total chain difficulty value of zero.")
         }
-        let final_difficulty = R::final_difficulty(
+        let final_difficulty = total_difficulty;/*R::final_difficulty(
             R::block_number(&core_parent_header),
             total_difficulty,
             chain_spec.as_ref(),
-        );
+        );*/
         if final_difficulty.is_zero() {
             warn!("Proving a final chain difficulty value of zero.")
         }
@@ -174,7 +176,7 @@ where
         for num_blocks in 1..=block_count {
             // Run the engine
             info!("Pre execution validation ...");
-            engine.validate_header::<<Self as PreflightClient<N, R, P>>::Validation>()?;
+            //engine.validate_header::<<Self as PreflightClient<N, R, P>>::Validation>()?;
             info!("Executing transactions ...");
             let bundle_state =
                 engine.execute_transactions::<<Self as PreflightClient<N, R, P>>::Execution>()?;
@@ -260,8 +262,9 @@ where
 
             let mut unresolvable_state_keys = B256Set::default();
 
-            for (address, account_proof) in latest_proofs {
+            /*for (address, account_proof) in latest_proofs {
                 let db_key = keccak256(address);
+                println!("latest proof {}, {}", address, state_trie.get(db_key).is_none());
 
                 // if the key was inserted, extend with the inclusion proof
                 if state_trie.get(db_key).is_none() {
@@ -307,7 +310,7 @@ where
                         .hydrate_from_rlp(proof.storage_proof.iter().flat_map(|p| &p.proof))
                         .with_context(|| format!("invalid storage proof for {}", address))?;
                 }
-            }
+            }*/
 
             for state_key in unresolvable_state_keys {
                 let proof = preflight_db

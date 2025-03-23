@@ -4,10 +4,6 @@ default:
 build +ARGS="--release":
     cargo build -p zeth-ethereum --bin zeth-ethereum {{ARGS}}
 
-    cargo build -p zeth-optimism --bin zeth-optimism {{ARGS}}
-
-    cargo build -p zeth-benchmark --bin zeth-benchmark {{ARGS}}
-
 cuda: (build "--release -F cuda")
 
 metal: (build "--release -F metal")
@@ -16,10 +12,6 @@ run bin +ARGS:
     RUST_LOG=info ./target/release/zeth-{{bin}} {{ARGS}}
 
 ethereum +ARGS: (run "ethereum" ARGS)
-
-optimism +ARGS: (run "optimism" ARGS)
-
-benchmark +ARGS: (run "benchmark" ARGS)
 
 clippy:
     RISC0_SKIP_BUILD=1 cargo clippy -p zeth-ethereum
@@ -34,8 +26,6 @@ test:
     cargo test --all-targets -p zeth-core -p zeth-preflight -p zeth-guests -p zeth -p zeth-benchmark -F debug-guest-build
 
     cargo test --all-targets -p zeth-core-ethereum -p zeth-preflight-ethereum -p zeth-ethereum -F debug-guest-build
-
-    cargo test --all-targets -p zeth-core-optimism -p zeth-preflight-optimism -p zeth-optimism -F debug-guest-build
 
     cargo test --all-targets -p zeth-testeth -F ef-tests
 

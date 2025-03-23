@@ -26,7 +26,7 @@ pub trait PreflightDriver<Core: CoreDriver, N: Network> {
     fn derive_block(block: N::BlockResponse, ommers: Vec<N::HeaderResponse>) -> Core::Block;
     fn derive_header_response(block: N::BlockResponse) -> N::HeaderResponse;
     fn header_response(block: &N::BlockResponse) -> &N::HeaderResponse;
-    fn uncles(block: &N::BlockResponse) -> &Vec<B256>;
+    fn uncles(block: &N::BlockResponse) -> Vec<B256>;
     fn derive_receipt(receipt: N::ReceiptResponse) -> Core::Receipt;
     fn derive_data(
         data: StatelessClientData<N::BlockResponse, N::HeaderResponse>,
