@@ -262,12 +262,11 @@ where
 
             let mut unresolvable_state_keys = B256Set::default();
 
-            /*for (address, account_proof) in latest_proofs {
+            for (address, account_proof) in latest_proofs {
                 let db_key = keccak256(address);
-                println!("latest proof {}, {}", address, state_trie.get(db_key).is_none());
 
                 // if the key was inserted, extend with the inclusion proof
-                if state_trie.get(db_key).is_none() {
+                if (state_trie.size() == 0 || state_trie.get(db_key).is_none()) {
                     state_trie
                         .hydrate_from_rlp(account_proof.account_proof)
                         .with_context(|| format!("invalid account proof for {}", address))?;
@@ -310,7 +309,7 @@ where
                         .hydrate_from_rlp(proof.storage_proof.iter().flat_map(|p| &p.proof))
                         .with_context(|| format!("invalid storage proof for {}", address))?;
                 }
-            }*/
+            }
 
             for state_key in unresolvable_state_keys {
                 let proof = preflight_db

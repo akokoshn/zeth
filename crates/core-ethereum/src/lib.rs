@@ -46,6 +46,8 @@ use zeth_core::stateless::validate::ValidationStrategy;
 
 use std::str::FromStr;
 
+use log::{debug, error, info};
+
 pub struct RethStatelessClient;
 
 impl StatelessClient<RethCoreDriver, MemoryDB> for RethStatelessClient {
@@ -119,8 +121,6 @@ where
         total_difficulty: &mut U256,
         db: &mut Option<Database>,
     ) -> anyhow::Result<BundleState> {
-        println!("execute_transactions: {}, {}, {}", block.timestamp, block.number, block.parent_beacon_block_root.is_some());
-        println!("is cancun timestamp: {}", chain_spec.is_cancun_active_at_timestamp(block.timestamp));
         // Instantiate execution engine using database
         let mut executor = EthExecutorProvider::ethereum(chain_spec.clone())
             .batch_executor(db.take().expect("Missing database."));
@@ -142,14 +142,13 @@ where
                 .with_context(|| format!("invalid signature for tx {i}"))?;
 
             // WA: sender smart account code is not eip7702 formated
-            let default_sender_addr = Address::from_str("0x0000000000000000000000000000000000000001").unwrap();
-            println!("address {}", Address::from_public_key(vk));
+            let default_sender_addr = Address::from_str("0x0001344b3c9d028642cf3d7820d47a7ea3a23aab").unwrap();
+            debug!("transaction sender address {}", Address::from_public_key(vk));
             senders.push(default_sender_addr)
         }
 
         // Execute transactions
         let block_with_senders = take(block).with_senders_unchecked(senders);
-        println!("execute_and_verify_one");
         executor
             .execute_and_verify_one(BlockExecutionInput {
                 block: &block_with_senders,

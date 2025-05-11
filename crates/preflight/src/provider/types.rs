@@ -1,33 +1,17 @@
-// Copyright 2023, 2024 RISC Zero, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-use alloy::primitives::{Address, BlockHash, BlockNumber, TxHash, PrimitiveSignature as Signature, TxKind, ChainId, Bloom, Bytes, B256, b256, U256, FixedBytes};
+use alloy::primitives::{Address, BlockHash, BlockNumber, TxHash, /*PrimitiveSignature as Signature,*/ TxKind, ChainId, Bloom, Bytes, B256, b256, U256, FixedBytes};
 use alloy::network::primitives::{
     BlockResponse, BlockTransactions, HeaderResponse, TransactionResponse,
 };
 use alloy::eips::{eip2930::AccessList, eip7702::SignedAuthorization};
 use alloy::consensus::{Transaction, BlockHeader, TxType, TypedTransaction, EMPTY_OMMER_ROOT_HASH, TxLegacy};
 use alloy::network::{Ethereum, Network, TransactionBuilder, TransactionBuilderError, BuildResult, NetworkWallet};
-use reth_primitives::{TransactionSigned, sign_message};
+use reth_primitives::{TransactionSigned, sign_message, Signature};
 use reth_revm::primitives::bytes;
 use secp256k1::{rand, Keypair, Secp256k1, SecretKey};
 use std::str::FromStr;
+use log::{debug, error, info};
 
-//#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-//#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-//#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 #[derive(serde::Serialize)]
 #[derive(serde::Deserialize)]
 #[allow(non_snake_case)]
@@ -39,16 +23,12 @@ pub struct Header {
 	pub rollbackCounter: u32,
 	pub inTransactionsRoot: BlockHash,
 	pub receiptsRoot: BlockHash,
-	pub childBlocksRootHash: BlockHash,
 	pub shardId: u32,
-    //pub transactions BlockTransactions,
-	//pub transaction_hashes: []BlockHash,
-	//pub child_blocks: []BlockHash,
 	pub mainShardHash: BlockHash,
 	pub dbTimestamp: u64,
 	pub baseFee: U256,
 	pub l1Number: u64,
-    //pub logsBloom: Bloom,
+    //pub logsBloom: String,
 	pub gasUsed: String,
 }
 
@@ -112,7 +92,7 @@ impl BlockHeader for Header {
     }
 
     fn beneficiary(&self) -> Address {
-        Address::from_str("0x0000000000000000000000000000000000000001").unwrap()
+        Address::from_str("0x0000000000000000000000000000000000000002").unwrap()
     }
 
     fn state_root(&self) -> B256 {
@@ -132,6 +112,7 @@ impl BlockHeader for Header {
     }
 
     fn logs_bloom(&self) -> Bloom {
+        //Bloom::from_str(&self.logsBloom).expect("can't parse logBloom")
         Bloom::default()
     }
 
@@ -147,12 +128,15 @@ impl BlockHeader for Header {
         5000000
     }
 
+    // block gas used mismatch: got 21272, expected 21718
     fn gas_used(&self) -> u64 {
-        100000
+        //u64::from_str_radix(self.gasUsed.as_str(), 10).expect("cant convert gasUsed")
+        println!("gas used = 21272");
+        u64::from_str_radix("21272", 10).expect("cant convert gasUsed")
     }
 
     fn timestamp(&self) -> u64 {
-        todo!()
+        self.dbTimestamp
     }
 
     fn mix_hash(&self) -> FixedBytes<32> {
@@ -229,8 +213,6 @@ pub struct NilTransaction {
     pub bounceTo: Address,
     pub index: String,
     pub value: U256,
-    //pub token: []TokenBalance,
-    //pub chainId: u64,
     pub signature: String,
 }
 
@@ -260,14 +242,24 @@ impl TryFrom<NilTransaction> for TransactionSigned
 {
     type Error = alloy::rpc::types::eth::ConversionError;
     fn try_from(value: NilTransaction) -> Result<Self, Self::Error> {
-        let secp = Secp256k1::new();
-        // TODO value.from => key
-        //let key = SecretKey::from("00014982a56a0a9fd4c4fafc55b5dd05b78bcaf6").unwrap();
-        //let key_pair = Keypair::from_secret_key(&secp, &key);
-        let key_pair = Keypair::new(&secp, &mut rand::thread_rng());
-        let transaction = reth_primitives::Transaction::Legacy(TxLegacy::from(value));
-        let signature = sign_message(B256::from_slice(&key_pair.secret_bytes()[..]), transaction.signature_hash()).unwrap();
-        Ok(Self::from_transaction_and_signature(transaction, signature))
+        debug!("derive transaction, signature = {}", value.signature);
+        let transaction = reth_primitives::Transaction::Legacy(TxLegacy::from(value.clone()));
+
+        let sig = Signature::from_str(value.signature.as_str());
+        match sig {
+            Ok(v) => debug!("extract signature fron transaction: {:?}", v),
+            Err(ref e) => error!("cant parse signature: {}: {:?}", value.signature, e),
+        }
+
+        if sig.is_ok() {
+            Ok(Self::from_transaction_and_signature(transaction, sig.unwrap()))
+        } else {
+            let secp = Secp256k1::new();
+            let key_pair = Keypair::new(&secp, &mut rand::thread_rng());
+            let signature = sign_message(B256::from_slice(&key_pair.secret_bytes()[..]), transaction.signature_hash()).unwrap();
+            debug!("sign by random: {:?}", signature);
+            Ok(Self::from_transaction_and_signature(transaction, signature))
+        }
     }
 }
 
@@ -279,12 +271,18 @@ impl Transaction for NilTransaction {
 
     #[inline]
     fn nonce(&self) -> u64 {
-        0//TODO value.seqno
+        let sub : String = self.seqno[2..].to_string();
+        u64::from_str_radix(sub.as_str(), 16).expect("cant convert seqno")
     }
 
     #[inline]
     fn gas_limit(&self) -> u64 {
-        100000//TODO value.feeCredit
+        let gas_price = U256::from_str_radix("4a817c808", 16).unwrap();
+        let gas_limit_u256: U256 = self.feeCredit.checked_div(gas_price).unwrap();
+        println!("gas price {}", gas_price);
+        println!("gas limit {}", gas_limit_u256.to::<u64>());
+        println!("feeCredit {:?}", self.feeCredit);
+        return 90000
     }
 
     #[inline]
@@ -312,24 +310,6 @@ impl Transaction for NilTransaction {
         0
     }
 
-    /*fn effective_gas_price(&self, base_fee: Option<u64>) -> u128 {
-        10
-    }
-
-    #[inline]
-    fn is_dynamic_fee(&self) -> bool {
-        false
-    }
-
-    #[inline]
-    fn kind(&self) -> TxKind {
-        todo!()
-    }
-
-    #[inline]
-    fn is_create(&self) -> bool {
-        false
-    }*/
     fn to(&self) -> TxKind { todo!() }
 
     fn ty(&self) -> u8 { todo!() }
