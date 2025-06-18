@@ -142,7 +142,7 @@ where
                 .with_context(|| format!("invalid signature for tx {i}"))?;
 
             // WA: sender smart account code is not eip7702 formated
-            let default_sender_addr = Address::from_str("0x0001344b3c9d028642cf3d7820d47a7ea3a23aab").unwrap();
+            let default_sender_addr = Address::from_str("0x00015aabc7a86895bd0a4794ca1144e3fc30dd8b").unwrap();
             debug!("transaction sender address {}", Address::from_public_key(vk));
             senders.push(default_sender_addr)
         }

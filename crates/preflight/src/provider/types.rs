@@ -22,8 +22,11 @@ pub struct Header {
     pub patchLevel: u32,
 	pub rollbackCounter: u32,
 	pub inTransactionsRoot: BlockHash,
+    pub outTransactionsRoot: BlockHash,
+    pub smartContractsRoot: BlockHash,
 	pub receiptsRoot: BlockHash,
 	pub shardId: u32,
+    pub beneficiary: Address,
 	pub mainShardHash: BlockHash,
 	pub dbTimestamp: u64,
 	pub baseFee: U256,
@@ -92,11 +95,12 @@ impl BlockHeader for Header {
     }
 
     fn beneficiary(&self) -> Address {
-        Address::from_str("0x0000000000000000000000000000000000000002").unwrap()
+        //Address::from_str("0x0000000000000000000000000000000000000002").unwrap()
+        self.beneficiary
     }
 
     fn state_root(&self) -> B256 {
-        B256::random()
+        self.smartContractsRoot
     }
 
     fn transactions_root(&self) -> B256 {
@@ -130,9 +134,7 @@ impl BlockHeader for Header {
 
     // block gas used mismatch: got 21272, expected 21718
     fn gas_used(&self) -> u64 {
-        //u64::from_str_radix(self.gasUsed.as_str(), 10).expect("cant convert gasUsed")
-        println!("gas used = 21272");
-        u64::from_str_radix("21272", 10).expect("cant convert gasUsed")
+        u64::from_str_radix(self.gasUsed.as_str(), 10).expect("cant convert gasUsed")
     }
 
     fn timestamp(&self) -> u64 {
@@ -277,16 +279,12 @@ impl Transaction for NilTransaction {
 
     #[inline]
     fn gas_limit(&self) -> u64 {
-        let gas_price = U256::from_str_radix("4a817c808", 16).unwrap();
-        let gas_limit_u256: U256 = self.feeCredit.checked_div(gas_price).unwrap();
-        println!("gas price {}", gas_price);
-        println!("gas limit {}", gas_limit_u256.to::<u64>());
-        println!("feeCredit {:?}", self.feeCredit);
-        return 90000
+        return 21718//90000
     }
 
     #[inline]
     fn gas_price(&self) -> Option<u128> {
+        //20000000008
         Some(0x4a817c808)
     }
 
